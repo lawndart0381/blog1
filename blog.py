@@ -14,7 +14,7 @@ template_dir = os.path.join(os.path.dirname(__file__), 'templates')
 jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(template_dir),
                                autoescape = True)
 
-secret = 'fart'
+secret = '$3cR3+$'
 
 def render_str(template, **params):
     t = jinja_env.get_template(template)
@@ -66,7 +66,7 @@ def render_post(response, post):
 
 class MainPage(BlogHandler):
   def get(self):
-      self.write('Hello, Udacity!')
+      self.write('Welcome to my blog site!')
 
 
 ##### user stuff
@@ -91,6 +91,9 @@ class User(db.Model):
     pw_hash = db.StringProperty(required = True)
     email = db.StringProperty()
 
+    def render(self):
+        return render_str('blog.html', a = self)
+
     @classmethod
     def by_id(cls, uid):
         return User.get_by_id(uid, parent = users_key())
@@ -113,75 +116,6 @@ class User(db.Model):
         u = cls.by_name(name)
         if u and valid_pw(name, pw, u.pw_hash):
             return u
-
-
-##### blog stuff
-
-def blog_key(name = 'default'):
-    return db.Key.from_path('blogs', name)
-
-class Post(db.Model):
-    subject = db.StringProperty(required = True)
-    content = db.TextProperty(required = True)
-    created = db.DateTimeProperty(auto_now_add = True)
-    last_modified = db.DateTimeProperty(auto_now = True)
-
-    def render(self):
-        self._render_text = self.content.replace('\n', '<br>')
-        return render_str("post.html", p = self)
-
-class BlogFront(BlogHandler):
-    def get(self):
-        posts = greetings = Post.all().order('-created')
-        self.render('front.html', posts = posts)
-
-class PostPage(BlogHandler):
-    def get(self, post_id):
-        key = db.Key.from_path('Post', int(post_id), parent=blog_key())
-        post = db.get(key)
-
-        if not post:
-            self.error(404)
-            return
-
-        self.render("permalink.html", post = post)
-
-class NewPost(BlogHandler):
-    def get(self):
-        if self.user:
-            self.render("newpost.html")
-        else:
-            self.redirect("/login")
-
-    def post(self):
-        if not self.user:
-            self.redirect('/blog')
-
-        subject = self.request.get('subject')
-        content = self.request.get('content')
-
-        if subject and content:
-            p = Post(parent = blog_key(), subject = subject, content = content)
-            p.put()
-            self.redirect('/blog/%s' % str(p.key().id()))
-        else:
-            error = "subject and content, please!"
-            self.render("newpost.html", subject=subject, content=content, error=error)
-
-
-###### Unit 2 HW's
-class Rot13(BlogHandler):
-    def get(self):
-        self.render('rot13-form.html')
-
-    def post(self):
-        rot13 = ''
-        text = self.request.get('text')
-        if text:
-            rot13 = text.encode('rot13')
-
-        self.render('rot13-form.html', text = rot13)
-
 
 USER_RE = re.compile(r"^[a-zA-Z0-9_-]{3,20}$")
 def valid_username(username):
@@ -210,18 +144,18 @@ class Signup(BlogHandler):
                       email = self.email)
 
         if not valid_username(self.username):
-            params['error_username'] = "That's not a valid username."
+            params['error_username'] = "Not a valid username."
             have_error = True
 
         if not valid_password(self.password):
-            params['error_password'] = "That wasn't a valid password."
+            params['error_password'] = "Not a valid password."
             have_error = True
         elif self.password != self.verify:
-            params['error_verify'] = "Your passwords didn't match."
+            params['error_verify'] = "Passwords did not match."
             have_error = True
 
         if not valid_email(self.email):
-            params['error_email'] = "That's not a valid email."
+            params['error_email'] = "Not a valid email address."
             have_error = True
 
         if have_error:
@@ -232,23 +166,19 @@ class Signup(BlogHandler):
     def done(self, *a, **kw):
         raise NotImplementedError
 
-class Unit2Signup(Signup):
-    def done(self):
-        self.redirect('/unit2/welcome?username=' + self.username)
-
 class Register(Signup):
     def done(self):
         #make sure the user doesn't already exist
         u = User.by_name(self.username)
         if u:
-            msg = 'That user already exists.'
+            msg = 'User already exists.'
             self.render('signup-form.html', error_username = msg)
         else:
             u = User.register(self.username, self.password, self.email)
             u.put()
 
             self.login(u)
-            self.redirect('/blog')
+            self.redirect('/welcome')
 
 class Login(BlogHandler):
     def get(self):
@@ -269,33 +199,20 @@ class Login(BlogHandler):
 class Logout(BlogHandler):
     def get(self):
         self.logout()
-        self.redirect('/blog')
+        self.redirect('/signup')
 
-class Unit3Welcome(BlogHandler):
+class Welcome(BlogHandler):
     def get(self):
         if self.user:
             self.render('welcome.html', username = self.user.name)
         else:
             self.redirect('/signup')
 
-class Welcome(BlogHandler):
-    def get(self):
-        username = self.request.get('username')
-        if valid_username(username):
-            self.render('welcome.html', username = username)
-        else:
-            self.redirect('/unit2/signup')
 
 app = webapp2.WSGIApplication([('/', MainPage),
-                               ('/unit2/rot13', Rot13),
-                               ('/unit2/signup', Unit2Signup),
-                               ('/unit2/welcome', Welcome),
-                               ('/blog/?', BlogFront),
-                               ('/blog/([0-9]+)', PostPage),
-                               ('/blog/newpost', NewPost),
                                ('/signup', Register),
                                ('/login', Login),
                                ('/logout', Logout),
-                               ('/unit3/welcome', Unit3Welcome),
+                               ('/welcome', Welcome),
                                ],
                               debug=True)

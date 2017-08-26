@@ -1,0 +1,10 @@
+{% extends "template.html" %}
+
+{% block content %}
+
+  {% for a in usersdb %}
+    {{ a.render() | safe }}
+    <br><br>
+  {% endfor %}
+
+{% endblock %}
